@@ -1,3 +1,5 @@
 <resources>
-    <string name="app_name">Arcade</string>
+    <string name="app_name">ARCADE / NINJA HACKERS</string>
+    <string name="button_capture">Capture and evaluate</string>
+    <string name="not_evaluated">Not analysed yet</string>
 </resources>
