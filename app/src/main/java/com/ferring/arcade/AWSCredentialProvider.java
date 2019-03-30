@@ -1,4 +1,4 @@
-package com.luminocityonside.arcadeapplication;
+package com.ferring.arcade;
 
 import com.amazonaws.auth.AWSCredentials;
 
@@ -13,5 +13,4 @@ public class AWSCredentialProvider implements AWSCredentials {
     public String getAWSSecretKey() {
         return "ffhq8mjE/WNVeaQPVFiR9gpMwNyWrGcjlmCNnAx1_this_account_is_closed";
     }
-
 }
