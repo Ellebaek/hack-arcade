@@ -1,0 +1,4 @@
+# hack-arcade
+Hacked at medi-data hackathon Wednesday 27 March 2019. Simple android app to capture a picture (selfie) and evaluate the mood by consuming the Amazon Rekognition Service.
+
+Before building you need to add a default face image to res/drawable named download.jpg 
