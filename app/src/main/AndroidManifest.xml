@@ -16,7 +16,10 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
-        tools:ignore="GoogleAppIndexingWarning">
+        tools:ignore="GoogleAppIndexingWarning"
+        android:largeHeap="true">
+        <!-- largeHeap="true" is a hack to prevent out of memory exception when
+             rotating picture from front camera - unfixed reported bug  -->
         <activity android:name="com.ferring.arcade.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
