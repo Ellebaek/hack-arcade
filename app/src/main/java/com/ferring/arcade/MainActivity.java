@@ -3,7 +3,9 @@ package com.ferring.arcade;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Camera;
 import android.media.ExifInterface;
+import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -25,22 +27,28 @@ import com.amazonaws.services.rekognition.model.CreateCollectionRequest;
 import com.amazonaws.services.rekognition.model.CreateCollectionResult;
 import com.amazonaws.services.rekognition.model.DeleteCollectionRequest;
 import com.amazonaws.services.rekognition.model.DeleteCollectionResult;
+import com.amazonaws.services.rekognition.model.Emotion;
 import com.amazonaws.services.rekognition.model.FaceRecord;
 import com.amazonaws.services.rekognition.model.IndexFacesRequest;
 import com.amazonaws.services.rekognition.model.IndexFacesResult;
 import com.amazonaws.services.rekognition.model.ListCollectionsRequest;
 import com.amazonaws.services.rekognition.model.ListCollectionsResult;
-import com.amazonaws.services.rekognition.model.ListFacesRequest;
-import com.amazonaws.services.rekognition.model.ListFacesResult;
 import com.amazonaws.services.rekognition.model.Image;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MainActivity extends AppCompatActivity {
     AmazonRekognitionClient amazonRekognitionClient;
@@ -63,18 +71,14 @@ public class MainActivity extends AppCompatActivity {
 
     private class HandleClick implements View.OnClickListener {
         public void onClick(View arg0) {
-            Log.w("", "THEL: I was clicked");
-            //Button btn = (Button)arg0; //cast view to a button
+            ((TextView)findViewById(R.id.textViewResult)).setText(R.string.not_evaluated);
             dispatchTakePictureIntent();
-            // update the TextView text
-            //((TextView)findViewById(R.id.textView)).setText("You pressed " + btn.getText());
         }
     }
 
     static final int REQUEST_TAKE_PHOTO = 1;
     protected void onActivityResult(int requestCode, int resultCode, Intent data)
     {
-        Log.w("", "THEL: Request code: " + requestCode);
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK)
         {
@@ -92,8 +96,6 @@ public class MainActivity extends AppCompatActivity {
                     imageView.setRotation(rotateImage);
                     imageView.setImageBitmap(currentBitmap);
                     new AsyncTaskRunner().execute();
-//                    String response = IndexFaces();
-//                    Log.w("0","Result: " + response);
                 }
             } catch (Exception e) {
                 // file not found
@@ -112,15 +114,13 @@ public class MainActivity extends AppCompatActivity {
             Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             // Ensure that there's a camera activity to handle the intent
             if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-                Log.w("", "THEL: camera is in place");
-                // Ceate the File where the photo should go
+                // Create the File where the photo should go
                 File photoFile = null;
                 try {
                     photoFile = createImageFile();
-                    Log.w("", "THEL: photo file created");
                 } catch (IOException ex) {
                     // Error occurred while creating the File
-                    Log.w("", "THEL: photo file not created");
+                    ((TextView)findViewById(R.id.textViewResult)).setText(ex.getMessage());
                 }
                 // Continue only if the File was successfully created
                 if (photoFile != null) {
@@ -198,17 +198,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public String CreateCollection(){
+        String result = "";
+        ListCollectionsRequest lrequest = new ListCollectionsRequest();
+        ListCollectionsResult lcolres = amazonRekognitionClient.listCollections(lrequest);
+        List<String> col_list = lcolres.getCollectionIds();
+        for (String n : col_list) {
+            if (n.equalsIgnoreCase(CollectionID)) {
+                result = DeleteCollection();
+            }
+        }
+
         CreateCollectionRequest request = new CreateCollectionRequest().withCollectionId(CollectionID);
         CreateCollectionResult response = amazonRekognitionClient.createCollection(request);
         String statusCode = response.getStatusCode().toString();
-        return "statusCode: "+statusCode+": "+response.toString();
+        return result + " Create collection request statusCode: "+statusCode+": "+response.toString();
     }
 
     public String DeleteCollection(){
         DeleteCollectionRequest request = new DeleteCollectionRequest().withCollectionId(CollectionID);
         DeleteCollectionResult response = amazonRekognitionClient.deleteCollection(request);
         String statusCode = response.getStatusCode().toString();
-        return "statusCode: "+statusCode+": "+response.toString();
+        return "Delete collection request statusCode: "+statusCode+": "+response.toString();
     }
 
     public String IndexFaces(){
@@ -224,7 +234,6 @@ public class MainActivity extends AppCompatActivity {
         bitmap.compress(Bitmap.CompressFormat.JPEG,100,stream);
         ByteBuffer imageBytes = ByteBuffer.wrap(stream.toByteArray());
         image.withBytes(imageBytes);
-        //DeleteCollection();
         CreateCollection();
 
         IndexFacesRequest request = new IndexFacesRequest()
@@ -237,10 +246,46 @@ public class MainActivity extends AppCompatActivity {
         StringBuilder sb = new StringBuilder();
         for (FaceRecord faceRecord : faceRecords) {
             sb.append("Face ID: " + faceRecord.getFace().getFaceId().toString() + "\n");
-            sb.append("Emotions: " + faceRecord.getFaceDetail().getEmotions().toString() + "\n");
+            Map<String, Float> sortedMap = new LinkedHashMap<>();
+            List<Emotion> emotions = faceRecord.getFaceDetail().getEmotions();
+            HashMap<String, Float> map = new HashMap<>();
+            for (Emotion emotion : emotions) {
+                map.put(emotion.getType(), emotion.getConfidence());
+            }
+
+            // obtain sorted list
+            List<Map.Entry<String, Float>> entries = new ArrayList<>(map.entrySet());
+            Collections.sort(entries,
+                    new Comparator<Map.Entry<String, Float>>() {
+                        @Override
+                        public int compare(
+                                Map.Entry<String, Float> o1, Map.Entry<String, Float> o2) {
+                            return o1.getValue().compareTo(o2.getValue());
+                        }
+                    }
+            );
+
+            // add while sorting
+            for (Map.Entry<String, Float> entry : entries) {
+                sortedMap.put(entry.getKey(), entry.getValue());
+            }
+
+            // print in descending order
+            ArrayList<String> keys = new ArrayList<String>(sortedMap.keySet());
+            for (int i=keys.size()-1; i>=0; i--){
+                String k = keys.get(i);
+                sb.append(k + " : " + round(sortedMap.get(k), 2) + "\n");
+            }
         }
         DeleteCollection();
+
         return sb.toString();
+    }
+
+    public static BigDecimal round(float d, int decimalPlace) {
+        BigDecimal bd = new BigDecimal(Float.toString(d));
+        bd = bd.setScale(decimalPlace, BigDecimal.ROUND_HALF_UP);
+        return bd;
     }
 
     private class AsyncTaskRunner extends AsyncTask<Void, Void, String> {
